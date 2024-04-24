@@ -55,6 +55,9 @@ public class SimpleServer {
             } catch (ClosedChannelException e) {
                 return;
             }
+
+            Work work = new Work();
+
             // 分配字节缓冲需区用于接收客户端数据
             ByteBuffer readBuffer = ByteBuffer.allocate(1024);
             // 轮询Selector, select for Event
@@ -85,46 +88,13 @@ public class SimpleServer {
                             LOGGER.error("Server has error when connect with client.", e);
                             continue;
                         }
-                        // 连接成功
-                        socketChannel.configureBlocking(false); // Set For NIO.
-                        // Register socket to selector, Bind with Read.
-                        try {
-                            socketChannel.register(selector, SelectionKey.OP_READ);
-                        } catch (ClosedChannelException e) {
-                            socketChannel.close();
-                            continue;
-                        }
+                        work.register(socketChannel); // Register to the Work Thread.
                         LOGGER.info("Accept Connection Request From Client, from: {}", socketChannel.getRemoteAddress());
                         ByteBuffer sendBuffer = ByteBuffer.wrap("Hello Client, this is Server.".getBytes());
                         while (sendBuffer.hasRemaining()) {
                             socketChannel.write(sendBuffer);    // Send Msg to Client.
                         }
                     }
-                    if (selectionKey.isReadable()) {
-                        SocketChannel channel = (SocketChannel) selectionKey.channel();
-                        int len = 0;
-                        try {
-                            len = channel.read(readBuffer);
-                        } catch (IOException e) {
-                            LOGGER.error("Server Channel has error when read from client.", e);
-                            channel.close();
-                            selectionKey.cancel();
-                            selector.wakeup(); // Wakeup Selector for remove this key.
-                        }
-                        if (len > 0) {
-                            readBuffer.flip(); // ByteBuffer Changed to Read Mode.
-                            byte[] bytes = new byte[readBuffer.limit()];
-                            readBuffer.get(bytes);
-                            LOGGER.info("Server Received: {}", new String(bytes));
-                            readBuffer.clear(); // ByteBuffer Changed to Write Mode.
-                        } else if (len == -1) {
-                            LOGGER.info("Client has closed.");
-                            channel.close();
-                            selectionKey.cancel();
-                            selector.wakeup();
-                        }
-                    }
-                    // Else Event...
                 }
             }
         } catch (IOException e) {
